@@ -55,6 +55,9 @@ int main()
 
     emu2413picoI2s OPLL;
 
+    // Adjust the MIDI notes by how many semitones - in this case it is 2 (because of the lack of resampling steps in OPLL_Calc):
+    OPLL.setNoteAdjust(2);
+
     OPLL.writeReg(0x30, 0x30);
     OPLL.writeReg(0x31, 0x30); 
     OPLL.writeReg(0x32, 0x30);
@@ -65,22 +68,6 @@ int main()
     //OPLL.writeReg(0x10, 0x80); /* set F-Number(L). */
     //OPLL.writeReg(0x20, 0x15); /* set BLK & F-Number(H) and
                                  /* keyon. */
-
-    // doing some percussion here:
-    // OPLL_writeReg(&opll, 0x0e, 0x20);
-
-    // OPLL_writeReg(&opll, 0x16, 0x20);
-    // OPLL_writeReg(&opll, 0x17, 0x50);
-    // OPLL_writeReg(&opll, 0x18, 0xc0);
-    // OPLL_writeReg(&opll, 0x26, 0x07);
-    // OPLL_writeReg(&opll, 0x27, 0x05);
-    // OPLL_writeReg(&opll, 0x28, 0x01);
-
-    // OPLL_writeReg(&opll, 0x36, 0x00);
-    // OPLL_writeReg(&opll, 0x37, 0x00);
-    // OPLL_writeReg(&opll, 0x38, 0x00);
-
-    // OPLL_writeReg(&opll, 0x0e, 0x22);
 
     multicore_launch_core1(core1_entry);
 

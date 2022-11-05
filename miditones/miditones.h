@@ -1,8 +1,10 @@
 #ifndef MIDITONES_H
 #define MIDITONES_H
 
+#include <stdio.h>
 #include <cstdint>
 #include "midiFreqTable.h"
+#include "miditonesSettings.h"
 
 // Len Shustek's Miditones for arduino:
 // https://github.com/LenShustek/arduino-playtune/blob/master/Playtune.cpp
@@ -16,10 +18,10 @@ public:
     void playScore(const uint8_t *inputScore);
     void stopScore();
     void tune_delay(uint32_t msec);
-    //inline float convertMidiNoteToFreq(uint32_t midiNumber) {return freqOneOctave[midiNumber % 12] * (float)(1 << (uint32_t)(midiNumber / 12));}
-    inline void startPlaying() { tune_playing = true; }
+    inline void startPlaying();
     inline bool isPlaying() { return tune_playing; }
-    void stepScore();
+    inline void setNoteAdjust(int8_t noteAdj) { noteAdjust = noteAdj; }
+    void stepScore();    
 
     // static compilation virtual:
     inline void noteOff(uint8_t chan);
@@ -27,13 +29,16 @@ public:
     inline void mutexTryEnter();
     inline void mutexExit();
     inline void sleepMs(uint32_t duration);
+    void setUpOneShotTimer(uint32_t durationMs);
+    void waitTimerEventComplete();
     
 private:
     bool tune_playing = false;
     bool volume_present = false;
+    int8_t noteAdjust = 0;
     uint8_t score_start = 0;
     uint8_t* score;
-    uint32_t score_cursor;    
+    uint32_t score_cursor;  
 };
 
 template <typename T>
@@ -62,6 +67,16 @@ inline void PlayTune<T>::sleepMs(uint32_t duration) {
 }
 
 template <typename T>
+void PlayTune<T>::setUpOneShotTimer(uint32_t durationMs) {
+    static_cast<T*>(this)->setUpOneShotTimer(durationMs);
+}
+
+template <typename T>
+void PlayTune<T>::waitTimerEventComplete() {
+     static_cast<T*>(this)->waitTimerEventComplete();
+}
+
+template <typename T>
 PlayTune<T>::PlayTune() {
     tune_playing = false;
     score_start = 0;
@@ -75,6 +90,11 @@ PlayTune<T>::~PlayTune() {
     score_start = 0;
     score_cursor = 0;
     score = nullptr;
+}
+
+template <typename T>
+inline void PlayTune<T>::startPlaying() {
+    tune_playing = true;
 }
 
 template <typename T>
@@ -103,7 +123,7 @@ template <typename T>
 void PlayTune<T>::stepScore()
 {
     uint8_t cmd, opcode, chan, note;
-    uint32_t duration;
+    uint32_t durationMs;
     /* Do score commands until a "wait" is found, or the score is stopped.
     This is called initially from tune_playcore, but then is called
     from the interrupt routine when waits expire.
@@ -122,11 +142,21 @@ void PlayTune<T>::stepScore()
     while (tune_playing)
     {
         cmd = score[score_cursor++];
-        //printf("cmd: 0x%x\n", cmd);
+        printf("cmd: 0x%x\r\n", cmd);
         if (cmd < 0x80)
         { /* wait count in msec. */
-            duration = ((unsigned)cmd << 8) | (score[score_cursor++]);
-            sleepMs(duration);
+            durationMs = ((unsigned)cmd << 8) | (score[score_cursor++]);
+
+            if constexpr (isUsingFreeRTOS)
+            {
+                // start the one shot timer there, then switch task.
+                setUpOneShotTimer(durationMs);
+                waitTimerEventComplete();
+            }
+            else
+            {
+                sleepMs(durationMs);
+            }
 #if DBUG
             Serial.print("wait ");
             Serial.print(duration);
@@ -141,22 +171,33 @@ void PlayTune<T>::stepScore()
         chan = cmd & 0x0f;
         if (opcode == CMD_STOPNOTE)
         { /* stop note */
-            mutexTryEnter();
+            //mutexTryEnter();
             noteOff(chan);            
             // printf("note off event! number: %d\n", chan);
-            mutexExit();
+            //mutexExit();
 
-            sleepMs(10);
+            if constexpr (isUsingFreeRTOS)
+            {
+                setUpOneShotTimer(10);
+                waitTimerEventComplete();
+            }
+            else
+            {
+                sleepMs(10);
+            }
         }
         else if (opcode == CMD_PLAYNOTE)
         {                                 /* play note */
             note = score[score_cursor++]; // argument evaluation order is undefined in C!
             if (volume_present)
                 ++score_cursor; // ignore volume if present
+
+            printf("noteOn: %d, chan: %d\r\n", note, chan);    
 			
-            mutexTryEnter();
-            noteOn(chan, note);
-            mutexExit();
+            //mutexTryEnter();
+            noteOn(chan, note + noteAdjust);
+            //mutexExit();
+
         }
         else if (opcode == CMD_INSTRUMENT)
         {                   /* change a channel's instrument */

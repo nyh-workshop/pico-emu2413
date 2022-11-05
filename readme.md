@@ -14,7 +14,7 @@ Requirements:
 Limitations:
 - Some of the EMU2413 code has been changed to fit into that embedded system. Means that there are no memory allocations and a number of the tables (especially the large ones like tll_table) are precalculated with constexpr.
 - Since the RP2040 lacks of a hardware floating point unit, all of the resampling in the EMU2413 are disabled.
-- Without the resamplers active, the output frequency is off compared to the actual emulation of YM2413 on other platforms. Currently it is not known how much output frequency errors are present.
+- Without the resamplers active, the output frequency is off compared to the actual emulation of YM2413 on other platforms. Currently it is not known how much output frequency errors are present. A small fix is to add the "SetNoteAdjust" function which takes in no. of semitones to compensate for the error.
 - The percussions are not tested yet. It is not sure if the percussive sounds are being rendered correctly without that mentioned resampler.
 - There are clicking noises between note switches - this is mitigated by using an older version of the Miditones (v1.12) where there are note stops before the note change happens. This note stops allow the brief release of the note in the envelope generator and significantly minimizes the unpleasent noise.
 - The RP2040 has to be overclocked to 270MHz to prevent stuttering and sampling rate at 22050Hz. The OPLL calculations inside require quite a number of computation power which the RP2040 could not cope up if it is using the 125MHz speed.
